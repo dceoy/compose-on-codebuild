@@ -1,0 +1,12 @@
+---
+version: '3'
+
+services:
+  python:
+    container_name: python
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: dceoy/python:latest
+    entrypoint:
+      - /usr/bin/python
