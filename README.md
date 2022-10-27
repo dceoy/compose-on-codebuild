@@ -1,4 +1,4 @@
 code-to-ecr
 ===========
 
-Docker Image Builder using Docker Compose and AWS CodeBuild
+Docker Image Builder using AWS CodeBuild
