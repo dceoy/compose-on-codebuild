@@ -2,11 +2,11 @@
 version: '3'
 
 services:
-  python:
-    container_name: python
+  rain:
+    container_name: rain
     build:
       context: .
       dockerfile: Dockerfile
-    image: dceoy/python:latest
+    image: dceoy/rain:latest
     entrypoint:
-      - /usr/bin/python
+      - /usr/local/bin/rain
