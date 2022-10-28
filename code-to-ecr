@@ -1,0 +1,150 @@
+#!/usr/bin/env bash
+#
+# Docker Image Builder using AWS CodeBuild
+#
+# Usage:
+#   code-to-ecr [--debug] [--profile=<str>] [--codebuild-project=<name>]
+#     [--image-tag=<str>] <git_repo_path> <codecommit_repo_name>
+#     <image_repo_name>
+#   code-to-ecr --version
+#   code-to-ecr -h|--help
+#
+# Options:
+#   --debug                 Enable debug mode
+#   --profile=<str>         Specify a profile from a credential file
+#                           (Set ${AWS_PROFILE})
+#   --codebuild-project=<name>
+#                           Specify an AWS CodeBuild project
+#                           [default: code-to-ecr]
+#   --image-tag=<str>       Specify a Docker image tag [default: latest]
+#   --version               Print version information and exit
+#   -h, --help              Print this help text and exit
+#
+# Arguments:
+#   <git_repo_path>         Path to a local Git repository
+#   <codecommit_repo_name>  AWS CodeCommit repository name
+#   <image_repo_name>       Docker image repository name
+
+
+set -euo pipefail
+
+if [[ ${#} -ge 1 ]]; then
+  for a in "${@}"; do
+    [[ "${a}" = '--debug' ]] && set -x && break
+  done
+fi
+
+COMMAND_PATH=$(realpath "${0}")
+COMMAND_NAME=$(basename "${COMMAND_PATH}")
+COMMAND_VERSION='v0.0.1'
+CODEBUILD_PROJECT_NAME='code-to-ecr'
+IMAGE_TAG='latest'
+CODECOMMIT_REPO_BRANCH='main'
+DOCKERFILE_NAME='Dockerfile'
+DOCKER_BUILD_CONTEXT='.'
+DOCKER_BUILD_ARG=''
+DOCKERHUB_USER=''
+DOCKERHUB_TOKEN=''
+
+function print_version {
+  echo -e "${COMMAND_NAME}: ${COMMAND_VERSION}"
+}
+
+function print_usage {
+  sed -ne '1,2d; /^#/!q; s/^#$/# /; s/^# //p;' "${COMMAND_PATH}"
+}
+
+function abort {
+  {
+    if [[ ${#} -eq 0 ]]; then
+      cat -
+    else
+      COMMAND_NAME=$(basename "${COMMAND_PATH}")
+      echo -e "${COMMAND_NAME}: ${*}"
+    fi
+  } >&2
+  exit 1
+}
+
+while [[ ${#} -ge 1 ]]; do
+  {
+    case "${1}" in
+      -h | --help )
+        print_usage && exit 0
+        ;;
+      --version )
+        print_version && exit 0
+        ;;
+      --debug )
+        shift 1
+        ;;
+      --profile )
+        AWS_PROFILE="${2}" && shift 2
+        ;;
+      --profile=* )
+        AWS_PROFILE="${1#*\=}" && shift 1
+        ;;
+      --codebuild-project )
+        CODEBUILD_PROJECT_NAME="${2}" && shift 2
+        ;;
+      --codebuild-project=* )
+        CODEBUILD_PROJECT_NAME="${1#*\=}" && shift 1
+        ;;
+      --image-tag )
+        IMAGE_TAG="${2}" && shift 2
+        ;;
+      --image-tag=* )
+        IMAGE_TAG="${1#*\=}" && shift 1
+        ;;
+      -* )
+        abort "invalid option: ${1}"
+        ;;
+      * )
+        ARGV=("${@:1}") && break
+        ;;
+    esac
+  } || exit 1
+done
+
+[[ ${#ARGV[@]} -eq 3 ]] || abort 'invalid argument'
+LOCAL_GIT_REPO_PATH="${ARGV[0]}"
+CODECOMMIT_REPO_NAME="${ARGV[1]}"
+IMAGE_REPO_NAME="${ARGV[2]}"
+[[ -v AWS_PROFILE ]] || AWS_PROFILE='default'
+
+echo "AWSCLI:                   $(aws --version)"
+echo "GIT:                      $(git --version)"
+echo "AWS_PROFILE:              ${AWS_PROFILE}"
+echo "CODEBUILD_PROJECT_NAME:   ${CODEBUILD_PROJECT_NAME}"
+echo "LOCAL_GIT_REPO_PATH:      ${LOCAL_GIT_REPO_PATH}"
+echo "CODECOMMIT_REPO_NAME:     ${CODECOMMIT_REPO_NAME}"
+echo "IMAGE_REPO_NAME:          ${IMAGE_REPO_NAME}"
+echo "IMAGE_TAG:                ${IMAGE_TAG}"
+
+cd "${LOCAL_GIT_REPO_PATH}"
+aws codecommit get-repository --repository-name "${CODECOMMIT_REPO_NAME}" \
+  || aws codecommit create-repository --repository-name "${CODECOMMIT_REPO_NAME}"
+git push "codecommit://${AWS_PROFILE}@${CODECOMMIT_REPO_NAME}" "${CODECOMMIT_REPO_BRANCH}"
+
+aws ecr describe-repositories --repository-names "${IMAGE_REPO_NAME}" \
+  || aws ecr create-repository --repository-name "${IMAGE_REPO_NAME}"
+
+source_location_override="$( \
+  aws codecommit get-repository --repository-name "${IMAGE_REPO_NAME}" \
+    | grep -e 'cloneUrlHttp' | cut -d \" -f 4 \
+)"
+environment_variables_override="[
+  {\"name\": \"IMAGE_REPO_NAME\", \"value\": \"${IMAGE_REPO_NAME}\"},
+  {\"name\": \"IMAGE_TAG\", \"value\": \"${IMAGE_TAG}\"},
+  {\"name\": \"DOCKERFILE_NAME\", \"value\": \"${DOCKERFILE_NAME}\"},
+  {\"name\": \"DOCKER_BUILD_CONTEXT\", \"value\": \"${DOCKER_BUILD_CONTEXT}\"},
+  {\"name\": \"DOCKER_BUILD_ARG\", \"value\": \"${DOCKER_BUILD_ARG}\"},
+  {\"name\": \"DOCKERHUB_USER\", \"value\": \"${DOCKERHUB_USER}\"},
+  {\"name\": \"DOCKERHUB_TOKEN\", \"value\": \"${DOCKERHUB_TOKEN}\"}
+]"
+aws codebuild start-build \
+  --project-name "${CODEBUILD_PROJECT_NAME}" \
+  --environment-variables-override "${environment_variables_override}" \
+  --source-type-override CODECOMMIT \
+  --source-location-override "${source_location_override}" \
+  --source-version "${CODECOMMIT_REPO_BRANCH}"

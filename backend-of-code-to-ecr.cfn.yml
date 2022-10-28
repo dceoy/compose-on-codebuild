@@ -70,6 +70,7 @@ Resources:
                 - echo "Build completed on $(date)"
                 - echo 'Pushing the Docker image...'
                 - docker image push "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${IMAGE_REPO_NAME}:${IMAGE_TAG}"
+      SourceVersion: main
       TimeoutInMinutes: 10
       LogsConfig:
         CloudWatchLogs:
