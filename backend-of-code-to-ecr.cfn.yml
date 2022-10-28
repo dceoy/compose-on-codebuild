@@ -28,6 +28,8 @@ Resources:
             Value: !Ref AWS::Region
           - Name: AWS_ACCOUNT_ID
             Value: !Ref AWS::AccountId
+          - Name: IMAGE_REPO_NAME
+            Value: ''
           - Name: IMAGE_TAG
             Value: !Sub ${DefaultImageTag}
           - Name: DOCKERFILE_NAME
@@ -35,6 +37,10 @@ Resources:
           - Name: DOCKER_BUILD_CONTEXT
             Value: .
           - Name: DOCKER_BUILD_ARG
+            Value: ''
+          - Name: DOCKERHUB_USER
+            Value: ''
+          - Name: DOCKERHUB_TOKEN
             Value: ''
       Source:
         Type: NO_SOURCE
@@ -45,21 +51,25 @@ Resources:
             pre_build:
               commands:
                 - echo 'Validating variables...'
-                - set -eu && echo "  IMAGE_REPO_NAME  <-  ${IMAGE_REPO_NAME}"
-                - set -eu && echo "  IMAGE_TAG        <-  ${IMAGE_TAG}"
+                - echo "  IMAGE_REPO_NAME  <-  ${IMAGE_REPO_NAME}" && test -n "${IMAGE_REPO_NAME}"
+                - echo "  IMAGE_TAG        <-  ${IMAGE_TAG}" && test -n "${IMAGE_TAG}"
+                - echo 'Check Amazon ECR repository...'
+                - aws ecr describe-repositories --repository-names "${IMAGE_REPO_NAME}"
                 - echo 'Logging in to Amazon ECR...'
                 - aws ecr get-login-password --region "${AWS_DEFAULT_REGION}" | docker login --username AWS --password-stdin "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com"
+                - test -n "${DOCKERHUB_USER}" && echo 'Logging in to Docker Hub...' || :
+                - echo "${DOCKERHUB_TOKEN}" | docker login -u "${DOCKERHUB_USER}" --password-stdin || :
             build:
               commands:
                 - echo "Build started on $(date)"
                 - echo 'Building the Docker image...'
-                - set -eux && docker image build -t "${IMAGE_REPO_NAME}:${IMAGE_TAG}" -f "${DOCKERFILE_NAME}" $(test -n "${DOCKER_BUILD_ARG}" && echo "--build-arg ${DOCKER_BUILD_ARG}" || echo) "${DOCKER_BUILD_CONTEXT}"
-                - set -eux && docker image tag "${IMAGE_REPO_NAME}:${IMAGE_TAG}" "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${IMAGE_REPO_NAME}:${IMAGE_TAG}"
+                - docker image build -t "${IMAGE_REPO_NAME}:${IMAGE_TAG}" -f "${DOCKERFILE_NAME}" $(test -n "${DOCKER_BUILD_ARG}" && echo "--build-arg ${DOCKER_BUILD_ARG}" || echo) "${DOCKER_BUILD_CONTEXT}"
+                - docker image tag "${IMAGE_REPO_NAME}:${IMAGE_TAG}" "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${IMAGE_REPO_NAME}:${IMAGE_TAG}"
             post_build:
               commands:
                 - echo "Build completed on $(date)"
                 - echo 'Pushing the Docker image...'
-                - set -eux && docker image push "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${IMAGE_REPO_NAME}:${IMAGE_TAG}"
+                - docker image push "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${IMAGE_REPO_NAME}:${IMAGE_TAG}"
       TimeoutInMinutes: 10
       LogsConfig:
         CloudWatchLogs:
@@ -96,6 +106,7 @@ Resources:
                 Action:
                   - ecr:BatchCheckLayerAvailability
                   - ecr:CompleteLayerUpload
+                  - ecr:DescribeRepositories
                   - ecr:GetAuthorizationToken
                   - ecr:InitiateLayerUpload
                   - ecr:PutImage
