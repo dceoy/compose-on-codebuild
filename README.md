@@ -8,22 +8,24 @@ Docker Image Builder using AWS CodeBuild
 Installation
 ------------
 
-1.  Check out the repository.
+1.  Install [AWS CLI](https://aws.amazon.com/cli/) and set `~/.aws/config` and `~/.aws/credentials`.
+
+2.  Install [git-remote-codecommit](https://github.com/aws/git-remote-codecommit).
+
+3.  Check out the repository.
 
     ```sh
     $ git clone git@github.com:dceoy/code-to-ecr.git
-    $ cd code-to-ecr
     ```
 
-2.  Install [Rain](https://github.com/aws-cloudformation/rain) and set `~/.aws/config` and `~/.aws/credentials`.
 
 3.  Deploy AWS CloudFormation stacks for AWS CodeBuild.
 
     ```sh
-    $ rain deploy backend-of-code-to-ecr.cfn.yml backend-of-code-to-ecr
+    $ aws cloudformation create-stack \
+        --stack-name backend-of-code-to-ecr \
+        --template-body file://code-to-ecr/backend-of-code-to-ecr.cfn.yml
     ```
-
-4.  Install [AWS CLI](https://aws.amazon.com/cli/).
 
 Usage
 -----
@@ -39,9 +41,7 @@ Usage
 
     ```sh
     $ cd your_dockerfile_git_dir
-    $ aws codecommit get-repository --repository-name "${IMAGE_REPO_NAME}" \
-      | jq -r .repositoryMetadata.cloneUrlHttp \
-      | xargs -I{} git push {} main
+    $ git push "codecommit://default@${IMAGE_REPO_NAME}" main
     ```
 
 3.  Create a repository on Amazon ECR.
