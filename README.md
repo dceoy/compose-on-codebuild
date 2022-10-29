@@ -18,46 +18,21 @@ Installation
     $ git clone git@github.com:dceoy/code-to-ecr.git
     ```
 
-
-3.  Deploy AWS CloudFormation stacks for AWS CodeBuild.
+4.  Deploy AWS CloudFormation stacks for AWS CodeBuild.
 
     ```sh
+    $ cd code-to-ecr
     $ aws cloudformation create-stack \
         --stack-name backend-of-code-to-ecr \
-        --template-body file://code-to-ecr/backend-of-code-to-ecr.cfn.yml
+        --template-body file://backend-of-code-to-ecr.cfn.yml \
+        --capabilities CAPABILITY_NAMED_IAM
     ```
 
 Usage
 -----
 
-1.  Create a repository on AWS CodeCommit.
+```sh
+$ ./code-to-ecr <git_repo_path> <codecommit_repo_name> <image_repo_name>
+```
 
-    ```sh
-    $ IMAGE_REPO_NAME=<your_image_name>
-    $ aws codecommit create-repository --repository-name "${IMAGE_REPO_NAME}"
-    ```
-
-2.  Push a Git repository including Dockerfile to the CodeCommit repository.
-
-    ```sh
-    $ cd your_dockerfile_git_dir
-    $ git push "codecommit://default@${IMAGE_REPO_NAME}" main
-    ```
-
-3.  Create a repository on Amazon ECR.
-
-    ```sh
-    $ aws ecr create-repository --repository-name "${IMAGE_REPO_NAME}"
-    ```
-
-4.  Start build on CodeBuild.
-
-    ```sh
-    $ aws codecommit get-repository --repository-name "${IMAGE_REPO_NAME}" \
-      | jq -r .repositoryMetadata.cloneUrlHttp \
-      | xargs -I{} aws codebuild start-build \
-        --project-name code-to-ecr \
-        --environment-variables-override "name=IMAGE_REPO_NAME,value=${IMAGE_REPO_NAME}" \
-        --source-type-override CODECOMMIT \
-        --source-location-override '{}'
-    ```
+Run `./code-to-ecr --help` for more information.

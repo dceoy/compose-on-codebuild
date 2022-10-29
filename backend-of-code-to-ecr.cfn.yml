@@ -57,8 +57,11 @@ Resources:
                 - aws ecr describe-repositories --repository-names "${IMAGE_REPO_NAME}"
                 - echo 'Logging in to Amazon ECR...'
                 - aws ecr get-login-password --region "${AWS_DEFAULT_REGION}" | docker login --username AWS --password-stdin "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com"
-                - test -n "${DOCKERHUB_USER}" && echo 'Logging in to Docker Hub...' || :
-                - echo "${DOCKERHUB_TOKEN}" | docker login -u "${DOCKERHUB_USER}" --password-stdin || :
+                - |
+                  if [ -n "${DOCKERHUB_USER}" ] && [ -n "${DOCKERHUB_TOKEN}" ]; then
+                    echo 'Logging in to Docker Hub...'
+                    echo "${DOCKERHUB_TOKEN}" | docker login -u "${DOCKERHUB_USER}" --password-stdin
+                  fi
             build:
               commands:
                 - echo "Build started on $(date)"

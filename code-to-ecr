@@ -21,12 +21,16 @@
 #   -h, --help              Print this help text and exit
 #
 # Arguments:
-#   <git_repo_path>         Path to a local Git repository
+#   <git_repo_path>         Path to a local Git repository including Dockerfile
 #   <codecommit_repo_name>  AWS CodeCommit repository name
 #   <image_repo_name>       Docker image repository name
 
 
-set -euo pipefail
+set -eo pipefail
+
+[[ -n "${AWS_PROFILE}" ]] || AWS_PROFILE='default'
+
+set -u
 
 if [[ ${#} -ge 1 ]]; then
   for a in "${@}"; do
@@ -110,25 +114,34 @@ done
 LOCAL_GIT_REPO_PATH="${ARGV[0]}"
 CODECOMMIT_REPO_NAME="${ARGV[1]}"
 IMAGE_REPO_NAME="${ARGV[2]}"
-[[ -v AWS_PROFILE ]] || AWS_PROFILE='default'
 
-echo "AWSCLI:                   $(aws --version)"
-echo "GIT:                      $(git --version)"
-echo "AWS_PROFILE:              ${AWS_PROFILE}"
-echo "CODEBUILD_PROJECT_NAME:   ${CODEBUILD_PROJECT_NAME}"
-echo "LOCAL_GIT_REPO_PATH:      ${LOCAL_GIT_REPO_PATH}"
-echo "CODECOMMIT_REPO_NAME:     ${CODECOMMIT_REPO_NAME}"
-echo "IMAGE_REPO_NAME:          ${IMAGE_REPO_NAME}"
-echo "IMAGE_TAG:                ${IMAGE_TAG}"
+echo '>> Print configurations:'
+echo "  AWSCLI:                   $(aws --version)"
+echo "  GIT:                      $(git --version)"
+echo "  AWS_PROFILE:              ${AWS_PROFILE}"
+echo "  CODEBUILD_PROJECT_NAME:   ${CODEBUILD_PROJECT_NAME}"
+echo "  LOCAL_GIT_REPO_PATH:      ${LOCAL_GIT_REPO_PATH}"
+echo "  CODECOMMIT_REPO_NAME:     ${CODECOMMIT_REPO_NAME}"
+echo "  IMAGE_REPO_NAME:          ${IMAGE_REPO_NAME}"
+echo "  IMAGE_TAG:                ${IMAGE_TAG}"
 
+echo '>> Check the CodeCommit repository.'
+if ! aws codecommit get-repository --repository-name "${CODECOMMIT_REPO_NAME}"; then
+  echo '>> Create the CodeCommit repository.'
+  aws codecommit create-repository --repository-name "${CODECOMMIT_REPO_NAME}"
+fi
+
+echo '>> Push a Git repository to AWS CodeCommit.'
 cd "${LOCAL_GIT_REPO_PATH}"
-aws codecommit get-repository --repository-name "${CODECOMMIT_REPO_NAME}" \
-  || aws codecommit create-repository --repository-name "${CODECOMMIT_REPO_NAME}"
 git push "codecommit://${AWS_PROFILE}@${CODECOMMIT_REPO_NAME}" "${CODECOMMIT_REPO_BRANCH}"
 
-aws ecr describe-repositories --repository-names "${IMAGE_REPO_NAME}" \
-  || aws ecr create-repository --repository-name "${IMAGE_REPO_NAME}"
+echo '>> Check the ECR repository.'
+if ! aws ecr describe-repositories --repository-names "${IMAGE_REPO_NAME}"; then
+  echo '>> Create the ECR repository.'
+  aws ecr create-repository --repository-name "${IMAGE_REPO_NAME}"
+fi
 
+echo '>> Start building a Docker image using CodeBuild.'
 source_location_override="$( \
   aws codecommit get-repository --repository-name "${IMAGE_REPO_NAME}" \
     | grep -e 'cloneUrlHttp' | cut -d \" -f 4 \
