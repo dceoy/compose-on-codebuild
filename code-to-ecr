@@ -3,14 +3,15 @@
 # Docker Image Builder using AWS CodeBuild
 #
 # Usage:
-#   code-to-ecr [--debug] [--profile=<str>] [--codebuild-project=<name>]
-#     [--image-tag=<str>] <git_repo_path> <codecommit_repo_name>
-#     <image_repo_name>
+#   code-to-ecr [--debug] [-f|--force] [--profile=<str>]
+#     [--codebuild-project=<name>] [--image-tag=<str>] <git_repo_path>
+#     <codecommit_repo_name> <image_repo_name>
 #   code-to-ecr --version
 #   code-to-ecr -h|--help
 #
 # Options:
 #   --debug                 Enable debug mode
+#   -f, --force             Use --force option for git push
 #   --profile=<str>         Specify a profile from a credential file
 #                           (Set ${AWS_PROFILE})
 #   --codebuild-project=<name>
@@ -40,9 +41,10 @@ fi
 
 COMMAND_PATH=$(realpath "${0}")
 COMMAND_NAME=$(basename "${COMMAND_PATH}")
-COMMAND_VERSION='v0.0.1'
+COMMAND_VERSION='v0.0.2'
 CODEBUILD_PROJECT_NAME='code-to-ecr'
 IMAGE_TAG='latest'
+FORCE=0
 CODECOMMIT_REPO_BRANCH='main'
 DOCKERFILE_NAME='Dockerfile'
 DOCKER_BUILD_CONTEXT='.'
@@ -100,6 +102,9 @@ while [[ ${#} -ge 1 ]]; do
       --image-tag=* )
         IMAGE_TAG="${1#*\=}" && shift 1
         ;;
+      -f | --force )
+        FORCE=1 && shift 1
+        ;;
       -* )
         abort "invalid option: ${1}"
         ;;
@@ -133,7 +138,10 @@ fi
 
 echo '>> Push a Git repository to AWS CodeCommit.'
 cd "${LOCAL_GIT_REPO_PATH}"
-git push "codecommit://${AWS_PROFILE}@${CODECOMMIT_REPO_NAME}" "${CODECOMMIT_REPO_BRANCH}"
+git push \
+  $([[ ${FORCE} -eq 0 ]] || echo '--force') \
+  "codecommit://${AWS_PROFILE}@${CODECOMMIT_REPO_NAME}" \
+  "${CODECOMMIT_REPO_BRANCH}"
 
 echo '>> Check the ECR repository.'
 if ! aws ecr describe-repositories --repository-names "${IMAGE_REPO_NAME}"; then
