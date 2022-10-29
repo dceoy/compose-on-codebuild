@@ -2,11 +2,11 @@
 version: '3'
 
 services:
-  rain:
-    container_name: rain
+  code-to-ecr:
+    container_name: code-to-ecr
     build:
       context: .
       dockerfile: Dockerfile
-    image: dceoy/rain:latest
+    image: dceoy/code-to-ecr:latest
     entrypoint:
-      - /usr/local/bin/rain
+      - /usr/local/bin/code-to-ecr
