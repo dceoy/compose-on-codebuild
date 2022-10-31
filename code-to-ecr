@@ -14,9 +14,8 @@
 #
 # Options:
 #   --debug                 Enable debug mode
-#   -f, --force             Use --force option for git push
+#   -f, --force             Use -f option for git push
 #   --profile=<str>         Specify a profile from a credential file
-#                           (Set ${AWS_PROFILE})
 #   --codebuild-project=<name>
 #                           Specify an AWS CodeBuild project
 #                           [default: code-to-ecr]
@@ -41,11 +40,7 @@
 #   <image_repo_name>       Docker image repository name
 
 
-set -eo pipefail
-
-[[ -n "${AWS_PROFILE}" ]] || AWS_PROFILE='default'
-
-set -u
+set -euo pipefail
 
 if [[ ${#} -ge 1 ]]; then
   for a in "${@}"; do
@@ -56,9 +51,10 @@ fi
 COMMAND_PATH=$(realpath "${0}")
 COMMAND_NAME=$(basename "${COMMAND_PATH}")
 COMMAND_VERSION='v0.0.3'
+FORCE=0
+AWS_PROFILE=''
 CODEBUILD_PROJECT_NAME='code-to-ecr'
 IMAGE_TAG='latest'
-FORCE=0
 CODECOMMIT_REPO_BRANCH=''
 DOCKERFILE_NAME='Dockerfile'
 DOCKER_BUILD_CONTEXT='.'
@@ -193,28 +189,49 @@ echo "  DOCKER_BUILD_CONTEXT:     ${DOCKER_BUILD_CONTEXT}"
 [[ -z "${DOCKERHUB_USER}" ]] \
   || echo "  DOCKERHUB_USER:           ${DOCKERHUB_USER}"
 
+if [[ -n "${AWS_PROFILE}" ]]; then
+  aws="aws --profile ${AWS_PROFILE}"
+else
+  aws='aws'
+fi
+
 echo '>> Check the CodeCommit repository.'
-if ! aws codecommit get-repository --repository-name "${CODECOMMIT_REPO_NAME}"; then
+if ! ${aws} codecommit get-repository \
+  --repository-name "${CODECOMMIT_REPO_NAME}"
+then
   echo '>> Create the CodeCommit repository.'
-  aws codecommit create-repository --repository-name "${CODECOMMIT_REPO_NAME}"
+  ${aws} codecommit create-repository \
+    --repository-name "${CODECOMMIT_REPO_NAME}"
 fi
 
 echo '>> Push a Git repository to AWS CodeCommit.'
-# shellcheck disable=SC2046
-git push \
-  $([[ ${FORCE} -eq 0 ]] || echo '--force') \
-  "codecommit://${AWS_PROFILE}@${CODECOMMIT_REPO_NAME}" \
+if [[ ${FORCE} -eq 0 ]]; then
+  git_push='git push'
+else
+  git_push='git push -f'
+fi
+if [[ -n "${AWS_PROFILE}" ]]; then
+  git_remote_repo="codecommit://${AWS_PROFILE}@${CODECOMMIT_REPO_NAME}"
+else
+  git_remote_repo="codecommit://${CODECOMMIT_REPO_NAME}"
+fi
+${git_push} \
+  "${git_remote_repo}" \
   "${LOCAL_GIT_REPO_BRANCH}:${CODECOMMIT_REPO_BRANCH}"
 
 echo '>> Check the ECR repository.'
-if ! aws ecr describe-repositories --repository-names "${IMAGE_REPO_NAME}"; then
+if ! ${aws} ecr describe-repositories \
+  --repository-names "${IMAGE_REPO_NAME}"
+then
   echo '>> Create the ECR repository.'
-  aws ecr create-repository --repository-name "${IMAGE_REPO_NAME}"
+  ${aws} ecr create-repository \
+    --repository-name "${IMAGE_REPO_NAME}"
 fi
 
 echo '>> Start building a Docker image using CodeBuild.'
 source_location_override="$( \
-  aws codecommit get-repository --repository-name "${IMAGE_REPO_NAME}" \
+  ${aws} codecommit get-repository \
+    --repository-name "${CODECOMMIT_REPO_NAME}" \
     | grep -e 'cloneUrlHttp' | cut -d \" -f 4 \
 )"
 environment_variables_override="[
@@ -226,7 +243,7 @@ environment_variables_override="[
   {\"name\": \"DOCKERHUB_USER\", \"value\": \"${DOCKERHUB_USER}\"},
   {\"name\": \"DOCKERHUB_TOKEN\", \"value\": \"${DOCKERHUB_TOKEN}\"}
 ]"
-aws codebuild start-build \
+${aws} codebuild start-build \
   --project-name "${CODEBUILD_PROJECT_NAME}" \
   --environment-variables-override "${environment_variables_override}" \
   --source-type-override CODECOMMIT \
