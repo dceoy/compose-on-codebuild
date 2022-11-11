@@ -8,5 +8,7 @@ services:
       context: .
       dockerfile: Dockerfile
     image: dceoy/code-to-ecr:latest
+    volumes:
+      - ${HOME}/.aws:/root/.aws:ro
     entrypoint:
       - /usr/local/bin/code-to-ecr
