@@ -61,6 +61,7 @@ DOCKER_BUILD_CONTEXT='.'
 DOCKER_BUILD_ARG=''
 DOCKERHUB_USER=''
 DOCKERHUB_TOKEN=''
+ARGV=()
 
 function print_version {
   echo -e "${COMMAND_NAME}: ${COMMAND_VERSION}"
