@@ -87,14 +87,14 @@ Resources:
     Properties:
       RoleName: !Sub ${CodeBuildProjectName}-CodeBuildServiceRole
       AssumeRolePolicyDocument:
+        Version: 2012-10-17
         Statement:
-          - Action:
+          - Effect: Allow
+            Action:
               - sts:AssumeRole
-            Effect: Allow
             Principal:
               Service:
                 - codebuild.amazonaws.com
-        Version: 2012-10-17
       Path: /service-role/
       Policies:
         - PolicyName: !Sub ${CodeBuildProjectName}-CodeBuildServiceRole-policy
@@ -126,3 +126,16 @@ Resources:
     Properties:
       LogGroupName: !Sub /aws/codebuild/${CodeBuildProjectName}
       RetentionInDays: 14
+Outputs:
+  CodeBuildServiceRole:
+    Value: !Ref CodeBuildServiceRole
+    Export:
+      Name: !Sub ${AWS::Region}-${AWS::StackName}-CodeBuildServiceRole
+  CodeBuildProject:
+    Value: !Ref CodeBuildProject
+    Export:
+      Name: !Sub ${AWS::Region}-${AWS::StackName}-CodeBuildProject
+  CodeBuildLogGroup:
+    Value: !Ref CodeBuildLogGroup
+    Export:
+      Name: !Sub ${AWS::Region}-${AWS::StackName}-CodeBuildLogGroup
