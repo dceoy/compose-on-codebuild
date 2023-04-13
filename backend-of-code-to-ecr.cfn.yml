@@ -10,18 +10,54 @@ Parameters:
     Description: Set the default container image tag.
     Type: String
     Default: latest
+  CodeCommitBranch:
+    Description: Set the CodeCommit branch.
+    Type: String
+    Default: main
+  DockerfileName:
+    Description: Set the Dockerfile name.
+    Type: String
+    Default: Dockerfile
+  DockerBuildContext:
+    Description: Set the Docker build context.
+    Type: String
+    Default: .
+  DockerBuildArg:
+    Description: Set the Docker build-time variables.
+    Type: String
+    Default: ''
+  DockerHubUser:
+    Description: Set the Docker Hub user.
+    Type: String
+    Default: ''
+  DockerHubToken:
+    Description: Set the Docker Hub token.
+    Type: String
+    Default: ''
+  CodeBuildEnvironmentType:
+    Description: Set the CodeBuild environment type.
+    Type: String
+    Default: LINUX_CONTAINER
+  CodeBuildEnvironmentComputeType:
+    Description: Set the CodeBuild environment compute type.
+    Type: String
+    Default: BUILD_GENERAL1_SMALL
+  CodeBuildEnvironmentImage:
+    Description: Set the CodeBuild environment image.
+    Type: String
+    Default: aws/codebuild/standard:6.0
 Resources:
   CodeBuildProject:
     Type: AWS::CodeBuild::Project
     Properties:
-      Name: !Sub ${CodeBuildProjectName}
+      Name: !Ref CodeBuildProjectName
       ServiceRole: !GetAtt CodeBuildServiceRole.Arn
       Artifacts:
         Type: NO_ARTIFACTS
       Environment:
-        Type: LINUX_CONTAINER
-        ComputeType: BUILD_GENERAL1_SMALL
-        Image: aws/codebuild/standard:6.0
+        Type: !Ref CodeBuildEnvironmentType
+        ComputeType: !Ref CodeBuildEnvironmentComputeType
+        Image: !Ref CodeBuildEnvironmentImage
         PrivilegedMode: true
         EnvironmentVariables:
           - Name: AWS_DEFAULT_REGION
@@ -31,20 +67,22 @@ Resources:
           - Name: IMAGE_REPO_NAME
             Value: ''
           - Name: IMAGE_TAG
-            Value: !Sub ${DefaultImageTag}
+            Value: !Ref DefaultImageTag
           - Name: DOCKERFILE_NAME
-            Value: Dockerfile
+            Value: !Ref DockerfileName
           - Name: DOCKER_BUILD_CONTEXT
-            Value: .
+            Value: !Ref DockerBuildContext
           - Name: DOCKER_BUILD_ARG
-            Value: ''
+            Value: !Ref DockerBuildArg
           - Name: DOCKERHUB_USER
-            Value: ''
+            Value: !Ref DockerHubUser
           - Name: DOCKERHUB_TOKEN
-            Value: ''
+            Value: !Ref DockerHubToken
       Source:
         Type: NO_SOURCE
         GitCloneDepth: 1
+        GitSubmodulesConfig:
+          FetchSubmodules: true
         BuildSpec: |
           version: 0.2
           phases:
@@ -68,20 +106,22 @@ Resources:
                 - echo 'Building the Docker image...'
                 - docker image build -t "${IMAGE_REPO_NAME}:${IMAGE_TAG}" -f "${DOCKER_BUILD_CONTEXT%/}/${DOCKERFILE_NAME}" $(test -z "${DOCKER_BUILD_ARG}" || echo "--build-arg ${DOCKER_BUILD_ARG}") "${DOCKER_BUILD_CONTEXT}"
                 - docker image tag "${IMAGE_REPO_NAME}:${IMAGE_TAG}" "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${IMAGE_REPO_NAME}:${IMAGE_TAG}"
+                - docker image tag "${IMAGE_REPO_NAME}:${IMAGE_TAG}" "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${IMAGE_REPO_NAME}:${CODEBUILD_RESOLVED_SOURCE_VERSION}"
             post_build:
               commands:
                 - echo "Build completed on $(date)"
                 - echo 'Pushing the Docker image...'
                 - docker image push "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${IMAGE_REPO_NAME}:${IMAGE_TAG}"
-      SourceVersion: main
-      TimeoutInMinutes: 10
+                - docker image push "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${IMAGE_REPO_NAME}:${CODEBUILD_RESOLVED_SOURCE_VERSION}"
+      SourceVersion: !Sub refs/heads/${CodeCommitBranch}
+      TimeoutInMinutes: 60
       LogsConfig:
         CloudWatchLogs:
           GroupName: !Ref CodeBuildLogGroup
           Status: ENABLED
       Tags:
         - Key: Name
-          Value: !Sub ${CodeBuildProjectName}
+          Value: !Ref CodeBuildProjectName
   CodeBuildServiceRole:
     Type: AWS::IAM::Role
     Properties:

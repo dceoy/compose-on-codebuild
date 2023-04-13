@@ -7,8 +7,10 @@
 #     [--codebuild-project=<name>] [--image-tag=<str>]
 #     [--codecommit-repo-branch=<name>] [--dockerfile=<name>]
 #     [--docker-build-context=<path>] [--docker-build-arg=<str>]
-#     [--dockerhub-user=<name>] [--dockerhub-token=<str>] <git_repo_path>
-#     <codecommit_repo_name> <image_repo_name>
+#     [--dockerhub-user=<name>] [--dockerhub-token=<str>]
+#     [--environment-type=<name>] [--environment-image=<name>]
+#     [--environment-compute-type=<name>] <codecommit_repo_name>
+#     <image_repo_name>
 #   code-to-ecr --version
 #   code-to-ecr -h|--help
 #
@@ -31,6 +33,14 @@
 #                           Set Docker Hub user name
 #   --dockerhub-token=<str>
 #                           Set Docker Hub user token
+#   --environment-type=<name>
+#                           Set an environment type [default: LINUX_CONTAINER]
+#   --environment-image=<name>
+#                           Set an environment image
+#                           [default: aws/codebuild/standard:6.0]
+#   --environment-compute-type=<name>
+#                           Set an environment compute type
+#                           [default: BUILD_GENERAL1_SMALL]
 #   --version               Print version information and exit
 #   -h, --help              Print this help text and exit
 #
@@ -50,7 +60,7 @@ fi
 
 COMMAND_PATH=$(realpath "${0}")
 COMMAND_NAME=$(basename "${COMMAND_PATH}")
-COMMAND_VERSION='v0.0.3'
+COMMAND_VERSION='v0.0.4'
 FORCE=0
 AWS_PROFILE=''
 CODEBUILD_PROJECT_NAME='code-to-ecr'
@@ -61,6 +71,9 @@ DOCKER_BUILD_CONTEXT='.'
 DOCKER_BUILD_ARG=''
 DOCKERHUB_USER=''
 DOCKERHUB_TOKEN=''
+ENVIRONMENT_TYPE='LINUX_CONTAINER'
+ENVIRONMENT_IMAGE='aws/codebuild/standard:6.0'
+ENVIRONMENT_COMPUTE_TYPE='BUILD_GENERAL1_SMALL'
 ARGV=()
 
 function print_version {
@@ -151,6 +164,24 @@ while [[ ${#} -ge 1 ]]; do
         ;;
       --dockerhub-token=* )
         DOCKERHUB_TOKEN="${1#*\=}" && shift 1
+        ;;
+      --environment-type )
+        ENVIRONMENT_TYPE="${2}" && shift 2
+        ;;
+      --environment-type=* )
+        ENVIRONMENT_TYPE="${1#*\=}" && shift 1
+        ;;
+      --environment-image )
+        ENVIRONMENT_IMAGE="${2}" && shift 2
+        ;;
+      --environment-image=* )
+        ENVIRONMENT_IMAGE="${1#*\=}" && shift 1
+        ;;
+      --environment-compute-type )
+        ENVIRONMENT_COMPUTE_TYPE="${2}" && shift 2
+        ;;
+      --environment-compute-type=* )
+        ENVIRONMENT_COMPUTE_TYPE="${1#*\=}" && shift 1
         ;;
       -* )
         abort "invalid option: ${1}"
@@ -246,7 +277,10 @@ environment_variables_override="[
 ]"
 ${aws} codebuild start-build \
   --project-name "${CODEBUILD_PROJECT_NAME}" \
-  --environment-variables-override "${environment_variables_override}" \
   --source-type-override CODECOMMIT \
+  --environment-variables-override "${environment_variables_override}" \
+  --environment-type-override "${ENVIRONMENT_TYPE}" \
+  --image-override "${ENVIRONMENT_IMAGE}" \
+  --compute-type-override "${ENVIRONMENT_COMPUTE_TYPE}" \
   --source-location-override "${source_location_override}" \
   --source-version "${CODECOMMIT_REPO_BRANCH}"
