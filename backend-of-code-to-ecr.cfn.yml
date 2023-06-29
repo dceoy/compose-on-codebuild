@@ -122,6 +122,8 @@ Resources:
       Tags:
         - Key: Name
           Value: !Ref CodeBuildProjectName
+        - Key: ProjectName
+          Value: !Ref CodeBuildProjectName
   CodeBuildServiceRole:
     Type: AWS::IAM::Role
     Properties:
@@ -141,12 +143,11 @@ Resources:
           PolicyDocument:
             Version: 2012-10-17
             Statement:
-              - Resource: '*'
-                Effect: Allow
+              - Effect: Allow
                 Action:
                   - codecommit:GitPull
-              - Resource: '*'
-                Effect: Allow
+                Resource: '*'
+              - Effect: Allow
                 Action:
                   - ecr:BatchCheckLayerAvailability
                   - ecr:CompleteLayerUpload
@@ -155,17 +156,28 @@ Resources:
                   - ecr:InitiateLayerUpload
                   - ecr:PutImage
                   - ecr:UploadLayerPart
-              - Resource: '*'
-                Effect: Allow
+                Resource: '*'
+              - Effect: Allow
                 Action:
                   - logs:CreateLogGroup
                   - logs:CreateLogStream
                   - logs:PutLogEvents
+                Resource: '*'
+      Tags:
+        - Key: Name
+          Value: !Sub ${CodeBuildProjectName}-CodeBuildServiceRole
+        - Key: ProjectName
+          Value: !Ref CodeBuildProjectName
   CodeBuildLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub /aws/codebuild/${CodeBuildProjectName}
       RetentionInDays: 14
+      Tags:
+        - Key: Name
+          Value: !Sub /aws/codebuild/${CodeBuildProjectName}
+        - Key: ProjectName
+          Value: !Ref CodeBuildProjectName
 Outputs:
   CodeBuildServiceRole:
     Value: !Ref CodeBuildServiceRole
